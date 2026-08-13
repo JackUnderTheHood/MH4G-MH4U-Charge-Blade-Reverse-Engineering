@@ -23,11 +23,13 @@ A full restart is required after installation or removal. Do not load save state
 
 ## Artifact identity / 文件标识
 
+Packaging refresh / 重新封装（2026-08-12）：the internal user-facing wording was updated to describe the left Circle Pad states directly. Only documentation inside the ZIP archives changed; `code.ips`, overlays, hooks, filenames, and runtime behavior are unchanged. / 包内面向玩家的说明已改为直接描述左 Circle Pad 的输入状态；本次只有说明文字变化，`code.ips`、overlay、hook、文件名与运行行为均未改变。
+
 ### MH4G v1.2 localized/Japanese — ExeFS v3, both no-stick and stick-input branches covered
 
 - Title ID: `000400000011D700`
 - Archive: `MH4G_JPN_v1.2_CB_Fast_Morph_GP_v3_Azahar.zip`
-- Archive SHA-256: `3D5B864D160497167D2CBD2A3BB6F33128A20A9A6E57CD3940C83387A5BDA941`
+- Archive SHA-256: `60616F01515BF84BE8FCCB8206AA6123467B8C48F251BE9CA4625002FC0ACCBC`
 - `code.ips`: 698 bytes / 6 records
 - `code.ips` SHA-256: `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4`
 - Overlay: 640 bytes
@@ -37,7 +39,7 @@ A full restart is required after installation or removal. Do not load save state
 
 - Title ID: `0004000000126300`
 - Archive: `MH4U_USA_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`
-- Archive SHA-256: `B8C9D2B9F48E0F277BBBB5E2449E8EC110F8728A8AA6DF44B58AEF3B72F7B787`
+- Archive SHA-256: `C0058F7072850B2E5007324554B0AEA8C404B0CB3E40CD17A6B20B6B3CBCF303`
 - `code.ips`: 698 bytes / 6 records
 - `code.ips` SHA-256: `683B2AD2A378CA404CA7976F6D3E6721397A77FAB3357AB2C019CEFB5ED932FE`
 - Overlay: 640 bytes
@@ -49,7 +51,7 @@ A full restart is required after installation or removal. Do not load save state
 
 - Title ID: `0004000000126100`
 - Archive: `MH4U_EUR_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`
-- Archive SHA-256: `5ECF2013568EA64C133DFCA7374FDDD580C67A869C388265719629DCFC4EB39B`
+- Archive SHA-256: `D6350D54B3CF27804575DB46CFF770580FC1438240887DF2786CB0F3A63E1793`
 - `code.ips`: 698 bytes / 6 records
 - `code.ips` SHA-256: `56B266F5FA86346D79339EE84258FC878B23B49408684B7B6DF3237AB3024AB2`
 - Overlay: 640 bytes

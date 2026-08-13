@@ -121,7 +121,7 @@ Adding the fifth hook at `00CA830C` preserved the longer forward-moving fast ani
 
 The primary explanation for the old stick-related failures changed from “the fast move naturally lacks an opening GP” to “the stick-input fast branch was not covered.”
 
-The finalized MH4G package uses Title ID `000400000011D700`: `MH4G_JPN_v1.2_CB_Fast_Morph_GP_v3_Azahar.zip`, SHA-256 `3D5B864D160497167D2CBD2A3BB6F33128A20A9A6E57CD3940C83387A5BDA941`. Its `code.ips` is 698 bytes / 6 records, SHA-256 `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4`.
+The finalized MH4G package uses Title ID `000400000011D700`: `MH4G_JPN_v1.2_CB_Fast_Morph_GP_v3_Azahar.zip`. Its initial archive SHA-256 was `3D5B864D160497167D2CBD2A3BB6F33128A20A9A6E57CD3940C83387A5BDA941`; its `code.ips` is 698 bytes / 6 records, SHA-256 `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4`.
 
 ## 2026-08-09: USA no-stick-input v2 proves the regional porting method
 
@@ -147,7 +147,7 @@ The four adjacent USA entry stubs then exposed the stick-input fast entry. The f
 
 The approximately 22-minute mixed regression covered no-stick/stick-input and morph/fast-morph switching, two consecutive stick-input fast GPs, three consecutive stick-input morph GPs, red-shield bursts, discharge, axe slam/roundslash, rolling, area transitions, and combat recovery. The final five state words were zero. RC1 was promoted byte-for-byte to formal ExeFS v3 for Title ID `0004000000126300`, archive `MH4U_USA_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`:
 
-- archive SHA-256: `B8C9D2B9F48E0F277BBBB5E2449E8EC110F8728A8AA6DF44B58AEF3B72F7B787`;
+- initial archive SHA-256: `B8C9D2B9F48E0F277BBBB5E2449E8EC110F8728A8AA6DF44B58AEF3B72F7B787`;
 - `code.ips`: 698 bytes / 6 records, SHA-256 `683B2AD2A378CA404CA7976F6D3E6721397A77FAB3357AB2C019CEFB5ED932FE`.
 
 ## 2026-08-10 to 08-11: EUR rejected same-address reuse and completed independently
@@ -158,7 +158,7 @@ The first installer readback occurred at the title screen rather than with an id
 
 The tested RC1 IPS was promoted unchanged to formal EUR ExeFS v3 for Title ID `0004000000126100`, archive `MH4U_EUR_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`:
 
-- archive SHA-256: `5ECF2013568EA64C133DFCA7374FDDD580C67A869C388265719629DCFC4EB39B`;
+- initial archive SHA-256: `5ECF2013568EA64C133DFCA7374FDDD580C67A869C388265719629DCFC4EB39B`;
 - `code.ips`: 698 bytes / 6 records, SHA-256 `56B266F5FA86346D79339EE84258FC878B23B49408684B7B6DF3237AB3024AB2`.
 
 ## 2026-08-11: Formal research closure
@@ -166,6 +166,16 @@ The tested RC1 IPS was promoted unchanged to formal EUR ExeFS v3 for Title ID `0
 On 2026-08-11, the project confirmed three finalized releases covering both the no-stick and stick-input branches: MH4G Japanese/localized v1.2, MH4U USA v1.1, and MH4U EUR v1.1. The generic `0x592` GP mechanism and other-weapon transplantation moved to open questions rather than remaining release gaps.
 
 The research objective is closed. Exact `0x592`/Guard causality and other-weapon GP transplantation remain future research questions, not unfinished requirements for these releases. The next stage is publication engineering: final regression as needed, comparison video, release packaging, and bilingual public documentation. The frozen `current_state` files remain research-site archives and are not substitutes for a public README.
+
+## 2026-08-12: Documentation-only package refresh
+
+The three release archives were rebuilt to replace older neutral/directional user-facing terminology with direct left-Circle-Pad descriptions. Their filenames and all tested machine code remained unchanged: the `code.ips` sizes, records, SHA-256 values, overlays, hooks, and runtime conclusions are identical. The current downloadable ZIP SHA-256 values are:
+
+- MH4G JPN/localized v1.2: `60616F01515BF84BE8FCCB8206AA6123467B8C48F251BE9CA4625002FC0ACCBC`;
+- MH4U USA v1.1: `C0058F7072850B2E5007324554B0AEA8C404B0CB3E40CD17A6B20B6B3CBCF303`;
+- MH4U EUR v1.1: `D6350D54B3CF27804575DB46CFF770580FC1438240887DF2786CB0F3A63E1793`.
+
+The earlier ZIP hashes above remain in this history as identifiers for the initially packaged archives; they are no longer the hashes of the current GitHub release downloads.
 
 ## Major failed routes and what they taught
 

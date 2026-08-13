@@ -121,7 +121,7 @@ Action logger 独立捕获到摇杆输入快速路径的 `001C0400`，以及“�
 
 由此，旧版摇杆相关失败的主要解释从“快速动作起手天然没有 GP”修正为“摇杆输入快速分支此前没有被覆盖”。
 
-MH4G 正式包对应 Title ID `000400000011D700`：`MH4G_JPN_v1.2_CB_Fast_Morph_GP_v3_Azahar.zip`，SHA-256 为 `3D5B864D160497167D2CBD2A3BB6F33128A20A9A6E57CD3940C83387A5BDA941`。其中 `code.ips` 为 698 bytes／6 records，SHA-256 为 `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4`。
+MH4G 正式包对应 Title ID `000400000011D700`：`MH4G_JPN_v1.2_CB_Fast_Morph_GP_v3_Azahar.zip`。首次封装的 ZIP SHA-256 为 `3D5B864D160497167D2CBD2A3BB6F33128A20A9A6E57CD3940C83387A5BDA941`；其中 `code.ips` 为 698 bytes／6 records，SHA-256 为 `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4`。
 
 ## 2026-08-09：USA 无摇杆输入 v2 验证区域移植方法
 
@@ -147,7 +147,7 @@ USA 的四个相邻入口 stub 随后暴露摇杆输入快速入口。第五 hoo
 
 约 22 分钟混合回归覆盖无摇杆输入／摇杆输入、普通／快速切换，连续两次摇杆输入快速 GP、连续三次摇杆输入普通 GP、红盾瓶爆、大解、斧下砸／回旋斩、翻滚、换区与战斗恢复。最终五个状态字全零，RC1 逐字节提升为正式 ExeFS v3；目标 Title ID 为 `0004000000126300`，发布包为 `MH4U_USA_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`：
 
-- ZIP SHA-256：`B8C9D2B9F48E0F277BBBB5E2449E8EC110F8728A8AA6DF44B58AEF3B72F7B787`；
+- 首次封装 ZIP SHA-256：`B8C9D2B9F48E0F277BBBB5E2449E8EC110F8728A8AA6DF44B58AEF3B72F7B787`；
 - `code.ips`：698 bytes／6 records，SHA-256 `683B2AD2A378CA404CA7976F6D3E6721397A77FAB3357AB2C019CEFB5ED932FE`。
 
 ## 2026-08-10 至 08-11：EUR 排除同址复用并独立完成
@@ -158,7 +158,7 @@ Hazerou 的 EUR Gateshark 参考进一步支持相同的游戏层动作编号组
 
 已测试 RC1 IPS 原样提升为 EUR 正式 ExeFS v3；目标 Title ID 为 `0004000000126100`，发布包为 `MH4U_EUR_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`：
 
-- ZIP SHA-256：`5ECF2013568EA64C133DFCA7374FDDD580C67A869C388265719629DCFC4EB39B`；
+- 首次封装 ZIP SHA-256：`5ECF2013568EA64C133DFCA7374FDDD580C67A869C388265719629DCFC4EB39B`；
 - `code.ips`：698 bytes／6 records，SHA-256 `56B266F5FA86346D79339EE84258FC878B23B49408684B7B6DF3237AB3024AB2`。
 
 ## 2026-08-11：主研究正式结案
@@ -166,6 +166,16 @@ Hazerou 的 EUR Gateshark 参考进一步支持相同的游戏层动作编号组
 2026-08-11，项目确认三个同时覆盖无摇杆输入与摇杆输入两种分支的正式版本均已完成：MH4G Japanese／汉化 v1.2、MH4U USA v1.1 与 MH4U EUR v1.1。`0x592` 的通用 GP 机制与其他武器移植转入开放问题，不再作为正式版缺口。
 
 研究主目标至此关闭。`0x592` 与 Guard 的精确因果关系、向其他武器移植 GP 等只保留为 Future Research／Open Questions，不再属于三个正式版的未完成需求。下一阶段是发布工程：按需最终回归、录制对比视频、整理发布包与中英文公开文档。冻结的 `current_state` 文件是研究现场档案，不能直接替代公开 README。
+
+## 2026-08-12：只更新说明文字的安装包重新封装
+
+三个发布 ZIP 重新构建，把包内较旧的“中性／方向”用户表述改成直接描述左 Circle Pad 状态的说法。文件名与所有已测试机器码均未改变：`code.ips` 的大小、记录、SHA-256、overlay、hook 及运行时结论全部保持一致。当前提供下载的 ZIP SHA-256 为：
+
+- MH4G JPN／汉化 v1.2：`60616F01515BF84BE8FCCB8206AA6123467B8C48F251BE9CA4625002FC0ACCBC`；
+- MH4U USA v1.1：`C0058F7072850B2E5007324554B0AEA8C404B0CB3E40CD17A6B20B6B3CBCF303`；
+- MH4U EUR v1.1：`D6350D54B3CF27804575DB46CFF770580FC1438240887DF2786CB0F3A63E1793`。
+
+前文保留的旧 ZIP 哈希用于标识首次封装的历史安装包，不再对应当前 GitHub Release 中的下载文件。
 
 ## 主要失败路线及其价值
 

@@ -85,11 +85,13 @@ What is confirmed is that the fast window does not simply inherit the entire mor
 
 ## Release identity and checksums
 
+The three archives were repackaged on **2026-08-12** to replace older neutral/directional wording with clearer left-Circle-Pad descriptions. This was a documentation-only package refresh: the filenames, `code.ips` files, overlays, hooks, and tested gameplay behavior did not change. The ZIP hashes below identify the current downloadable archives.
+
 ### MH4G v1.2 localized/Japanese — ExeFS v3, both no-stick and stick-input branches covered
 
 - Title ID: `000400000011D700`
 - Release archive: `MH4G_JPN_v1.2_CB_Fast_Morph_GP_v3_Azahar.zip`
-- ZIP SHA-256: `3D5B864D160497167D2CBD2A3BB6F33128A20A9A6E57CD3940C83387A5BDA941`
+- ZIP SHA-256: `60616F01515BF84BE8FCCB8206AA6123467B8C48F251BE9CA4625002FC0ACCBC`
 - `code.ips`: 698 bytes, 6 records
 - `code.ips` SHA-256: `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4`
 - 640-byte overlay SHA-256: `E82E27E04C7163BFBEACBD5ED5B02115B7DFC814803A4EB326102A7B5DC25D03`
@@ -98,7 +100,7 @@ What is confirmed is that the fast window does not simply inherit the entire mor
 
 - Title ID: `0004000000126300`
 - Release archive: `MH4U_USA_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`
-- ZIP SHA-256: `B8C9D2B9F48E0F277BBBB5E2449E8EC110F8728A8AA6DF44B58AEF3B72F7B787`
+- ZIP SHA-256: `C0058F7072850B2E5007324554B0AEA8C404B0CB3E40CD17A6B20B6B3CBCF303`
 - `code.ips`: 698 bytes, 6 records
 - `code.ips` SHA-256: `683B2AD2A378CA404CA7976F6D3E6721397A77FAB3357AB2C019CEFB5ED932FE`
 - 640-byte overlay SHA-256: `E529D92B9ECFD8BE21D084A87250EC426DF0C1091C0F488AFF72B145783E1F0A`
@@ -109,7 +111,7 @@ What is confirmed is that the fast window does not simply inherit the entire mor
 
 - Title ID: `0004000000126100`
 - Release archive: `MH4U_EUR_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`
-- ZIP SHA-256: `5ECF2013568EA64C133DFCA7374FDDD580C67A869C388265719629DCFC4EB39B`
+- ZIP SHA-256: `D6350D54B3CF27804575DB46CFF770580FC1438240887DF2786CB0F3A63E1793`
 - `code.ips`: 698 bytes, 6 records
 - `code.ips` SHA-256: `56B266F5FA86346D79339EE84258FC878B23B49408684B7B6DF3237AB3024AB2`
 - 640-byte overlay SHA-256: `FB318D5158E4028C45F5FB173D32D9FC5E46D9E179E0FD521D257FAA13949853`
