@@ -1,131 +1,159 @@
-# MH4G / MH4U Charge Blade Reverse Engineering and Fast Morph GP
+# MH4G / MH4U Charge Blade GP Reverse Engineering
 
-This repository collects **MH4G / MH4U** Charge Blade reverse-engineering notes, research methods, and ExeFS patches for fast-morph Guard Points. The mechanism was discovered and the first complete five-hook implementation was developed against the **localized MH4G v1.2 build**. Concrete MH4G addresses, machine-code values, and mechanism evidence come from that baseline; the MH4U USA/EUR addresses, relocated overlays, runtime evidence, Title IDs, and formal artifacts come from independent work on their respective v1.1 builds.
+[中文说明](README.zh-CN.md) · [Download releases](https://github.com/JackUnderTheHood/MH4G-MH4U-Charge-Blade-Reverse-Engineering-/releases) · [Technical analysis](docs/TECHNICAL_ANALYSIS.md) · [Checksums](ARTIFACTS.md)
 
-The layered logic, experimental process, motion/resource-lifetime model, and five-hook porting workflow can also be applied to **MH4U**. This means the method and implementation structure are portable; it does not mean that MH4G addresses or its `code.ips` can be used directly with MH4U. Each MH4U region and revision still requires independent address mapping, overlay relocation, dynamic validation, and clean ExeFS acceptance.
+This project documents the reverse engineering of Charge Blade Guard Points and red-shield phial bursts in *Monster Hunter 4G / 4 Ultimate*. It also provides two sets of runtime-tested Azahar ExeFS patches.
 
-The core mechanism research was formally closed on **2026-08-11**. Finalized ExeFS v3 releases covering fast morphs performed both without moving the left stick and while moving the left stick now exist for localized/Japanese MH4G v1.2, MH4U USA v1.1, and MH4U EUR v1.1.
+The project began with one goal: give fast morph slash a Guard Point. The investigation eventually separated four mechanisms that are easy to confuse:
 
-[中文说明](README.zh-CN.md) · [Development Methodology & Contributions](docs/DEVELOPMENT_METHODOLOGY.md) · [Technical Analysis](docs/TECHNICAL_ANALYSIS.md) · [Research History](docs/RESEARCH_HISTORY.md) · [Porting Notes](docs/PORTING_NOTES.md) · [Release Notes](RELEASE_NOTES.md)
+1. when during an action the GP can actually block an attack;
+2. whether the guard is actually accepted, rather than merely showing guard sparks;
+3. how GP guard performance changes recoil;
+4. how a successful red-shield GP reaches the phial-burst collision and damage pipeline.
 
-## Research and reproduction environment
+The final v4 implementation no longer borrows another action's logical identity as v3 did. It preserves the native fast-morph actions and animations, extends an existing native guard-timing call, and enters the native phial-burst path only after a successful red-shield contact.
 
-The project became practically viable as a sustained dynamic reverse-engineering effort because **Azahar 2126.0** provided a usable and sufficiently stable GDB connection. Earlier versions could not maintain a reliable remote-debugging session, making runtime capture, machine-code patch installation and readback, state inspection, and safe recovery too unstable for a reproducible workflow.
+## Mechanism at a glance
 
-Even on 2126.0, conventional interactive breakpoints and watchpoints were not dependable enough to serve as the primary research workflow. Breakpoint hits, continued execution, and watchpoint traps could produce remote errors, same-value-write noise, or an unusable session. Most runtime evidence was therefore collected through purpose-built GDB scripts, temporary code hooks, low-noise bounded loggers, memory snapshots/exports, and word-for-word readback checks rather than manual breakpoint stepping. A small number of narrow breakpoint or watchpoint trials were used only for controlled diagnosis, and their results required confirmation through scripted records and in-game behavior.
+![Guard Point and phial-burst mechanism flowchart](assets/gp-phial-burst-flowchart.svg)
 
-Azahar 2126.0 is the project's **verified research/debugging baseline**. This does not automatically make 2126.0 the minimum version required by players to run the final ExeFS `code.ips`: the release does not depend on GDB, and pure runtime compatibility with earlier Azahar builds has not been systematically tested.
+The diagram separates three mechanisms that are often mistaken for one switch:
 
-## Features
+- `state+F0 bit 0x10` is a required condition for the attack to be genuinely blocked. Guard sparks alone do not prove that the attack was stopped.
+- `state+F0 bit 0x2000` does not make a GP guard check valid by itself. Once guarding is valid, it reduces the internal recoil-classification value by 10, with a minimum of 1.
+- A successful contact does not automatically create a phial burst. Without red shield, the result is guard only; with red shield, the validated path continues through the native phial-burst object, collision processing, result queue, and HP damage.
 
-- Adds GP behavior to the fast morph slash with no stick input.
-- Adds the same behavior to the fast morph slash with stick input.
-- Keeps no-stick/stick-input morph and fast-morph animations isolated.
-- Preserves red-shield phial bursts on successful GP contact.
-- Preserves primary follow-ups including axe slam, roundslash, and discharge.
-- Passes consecutive stick-input fast GP, re-entry, and state-recovery tests.
-- Passes clean ExeFS automatic loading and extended play with CPU JIT enabled.
-- Requires no GDB during normal use; the release is loaded through `code.ips`.
+The image is a readable overview rather than a substitute for the evidence chain. Exact call sites, Action filters, and the different fast-morph and charge-slash burst paths are documented in [Technical Analysis](docs/TECHNICAL_ANALYSIS.md).
 
-## Compatibility
+## Which package should I install?
 
-| Game build | Authoritative status | Notes |
-| --- | --- | --- |
-| MH4G Japanese/localized v1.2 | **ExeFS v3, both input branches covered** | Finalized; five hooks and a 640-byte overlay |
-| MH4U USA v1.1 | **ExeFS v3, both input branches covered** | Automatic loading, CPU-JIT-on operation, and an approximately 22-minute mixed gameplay regression passed |
-| MH4U EUR v1.1 | **ExeFS v3, both input branches covered** | Automatic loading, CPU-JIT-on operation, and an approximately 10-minute mixed gameplay regression passed |
+Choose **one** of the following packages.
 
-Do not reuse addresses, IPS files, or `code.ips` files across regions or game revisions.
+### Fast Morph GP v4
+
+For players who only want fast morph slash to gain a GP.
+
+- Fast morphs gain a GP both without moving the left stick and while moving it.
+- A successful GP without red shield does not create a phial burst.
+- A successful GP with red shield creates one phial burst.
+- AED and axe-slam follow-ups remain available.
+- Sword-mode charge-slash GP is not included.
+
+### Double Charge Slash GP v1 (combined package)
+
+For players who want both features.
+
+- It **already includes Fast Morph GP v4**.
+- Sword mode gains a GP while the shield is visibly held forward during charging.
+- Small and medium recoil do not interrupt the charge.
+- Large recoil still interrupts the charge according to the original rules.
+- A phial burst occurs only after a successful GP while red shield is active.
+
+Do not install both packages. The combined package already contains Fast Morph GP v4, so installing the standalone patch as well would create conflicting `code.ips` records.
+
+## Supported builds
+
+| Build | Title ID | Fast Morph GP v4 | Combined v1 |
+|---|---|---:|---:|
+| MH4G Japanese/localized v1.2 | `000400000011D700` | Tested | Tested |
+| MH4U USA v1.1 | `0004000000126300` | Tested | Tested |
+| MH4U EUR v1.1 | `0004000000126100` | Tested | Tested |
+
+“Supported” means that each build received independent address mapping, patch construction, runtime installation, gameplay testing, and safe restoration. Addresses differ by region; changing only the folder name or Title ID does not port a patch.
 
 ## Installation
 
-1. Close Azahar completely.
-2. Back up existing mods and save states.
-3. Merge the release archive's `load` folder into the Azahar user directory.
-4. Confirm that the final file is in the directory matching the selected release:
+1. Fully close Azahar.
+2. Download the archive that exactly matches the game region and revision.
+3. Merge the archive's `load` folder into the Azahar user directory.
+4. Confirm that the final file is located at:
 
-   | Release | Final path |
-   | --- | --- |
-   | MH4G Japanese/localized v1.2 | `load/mods/000400000011D700/exefs/code.ips` |
-   | MH4U USA v1.1 | `load/mods/0004000000126300/exefs/code.ips` |
-   | MH4U EUR v1.1 | `load/mods/0004000000126100/exefs/code.ips` |
+   ```text
+   load/mods/<Title ID>/exefs/code.ips
+   ```
 
-5. Restart Azahar and enter the game from a normal in-game save.
+5. Restart the game and load a normal in-game save.
 
-If another `code.ips` already exists at that location, do not overwrite it or place both files side by side. Back it up and merge the IPS records correctly.
+The default Azahar user directory on Windows is usually:
 
-## Uninstallation
+```text
+C:\Users\<username>\AppData\Roaming\Azahar
+```
 
-Close Azahar completely, remove or rename the `code.ips` in the selected release's Title-ID directory, and restart the game. The mod does not alter the ROM or normal in-game save data.
+## Important notes
 
-## Important limitations
+- Only one final `code.ips` can be active for a given Title ID.
+- If another ExeFS patch is installed, back it up and merge IPS records correctly. Do not assume that overwriting one file combines two patches.
+- Do not enable old releases, GDB test patches, or experimental Gateshark codes at the same time.
+- Fully close Azahar before enabling, disabling, or replacing the patch.
+- Do not load save states created across different patch states; a save state may restore stale code memory.
+- The patch does not modify the ROM or normal game saves.
 
-- Fully restart the game after enabling, disabling, or replacing the ExeFS patch.
-- Do not load an Azahar save state created under a different mod state; a save state can restore old code memory.
-- Do not combine this ExeFS build with the project's GDB or Gateshark installers.
-- Guard direction and input timing still matter in combat. Being hit does not by itself prove a patch failure.
-- This is an unofficial research mod and is not affiliated with CAPCOM. A legally obtained game environment is required.
+To uninstall, fully close Azahar, move or rename `code.ips`, and restart the game.
 
-## Verified behavior
+## Validated behavior
 
-The final v3 build has closed-loop validation for:
+- Both fast-morph input branches keep their native animations and play once.
+- GP and phial-burst behavior is correctly separated by red-shield state.
+- Every tested red-shield GP produced only one burst.
+- AED and axe-slam follow-ups work after fast-morph GP.
+- Regular morphs, native morph GPs, and held-R guarding remain unaffected.
+- Short hold, normal release, and automatic full hold remain normal for charge slash.
+- Small and medium charge-GP recoil continue charging; large recoil interrupts it.
+- All three regions passed installation readback, state checks, and safe restoration.
 
-- automatic loading of all five hooks and the 640-byte overlay;
-- single, naturally ending fast animations with no stick input and with stick input;
-- isolation between fast-morph and morph animations;
-- fast-morph GP with no stick input and with stick input, morph GP regression, and red-shield phial bursts;
-- consecutive stick-input fast-morph GP without degrading into the morph animation;
-- primary follow-ups including axe slam, roundslash, and discharge;
-- rolling, area transitions, sheathing, combat recovery, and state cleanup;
-- extended real play with CPU JIT enabled.
+Multi-hit monster attacks were not covered by a dedicated test matrix. No repeated burst was observed in existing testing, but that is not an exhaustive proof for every multi-hit attack.
 
-A later comparison against the official MHGU implementation confirmed that its fast morph with stick input also has a GP and that its late-window feel is close to the current MH4G v3 behavior. The v3 fast GP window was further observed to be shorter than the morph window, so the former plan to trim its tail manually has been cancelled.
+## What changed from v3?
 
-What is confirmed is that the fast window does not simply inherit the entire morph window. A strong interpretation is that native action lifecycle, phase, or motion changes end the GP naturally. The exact close condition has not been located, so no single Action or flag should be described as proven to control it.
+V3 used five hooks and a 640-byte overlay. It let the fast action borrow the logical identity of an existing GP action while preserving the fast animation. This proved the feature and exposed the important mechanism differences, but it also required complex identity and resource-lifetime management.
 
-## Release identity and checksums
+V4 uses the later mechanism findings:
 
-The three archives were repackaged on **2026-08-12** to replace older neutral/directional wording with clearer left-Circle-Pad descriptions. This was a documentation-only package refresh: the filenames, `code.ips` files, overlays, hooks, and tested gameplay behavior did not change. The ZIP hashes below identify the current downloadable archives.
+- no motion/action identity replacement;
+- no five-hook resource overlay;
+- two hooks and a 264-byte cave for standalone Fast Morph GP v4;
+- three hooks and a 792-byte cave for the combined package;
+- GP, recoil, and phial burst each reconnect to a verified native path.
 
-### MH4G v1.2 localized/Japanese — ExeFS v3, both no-stick and stick-input branches covered
+V4 is therefore a different runtime implementation, not merely a documentation or version-number update.
 
-- Title ID: `000400000011D700`
-- Release archive: `MH4G_JPN_v1.2_CB_Fast_Morph_GP_v3_Azahar.zip`
-- ZIP SHA-256: `60616F01515BF84BE8FCCB8206AA6123467B8C48F251BE9CA4625002FC0ACCBC`
-- `code.ips`: 698 bytes, 6 records
-- `code.ips` SHA-256: `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4`
-- 640-byte overlay SHA-256: `E82E27E04C7163BFBEACBD5ED5B02115B7DFC814803A4EB326102A7B5DC25D03`
+The cause-and-effect sequence is:
 
-### MH4U USA v1.1 — ExeFS v3, both no-stick and stick-input branches covered
+```text
+v3 completes the first usable five-hook solution
+→ v3 becomes the stable A baseline for controlled comparisons
+→ A/B experiments separate guard acceptance, recoil adjustment, and burst delivery
+→ native mask-2 timing is found in the fast action itself
+→ final v4 replaces identity borrowing with a two-hook native-timing implementation
+→ charge-slash GP reuses the separated mechanisms as an independent cross-check
+```
 
-- Title ID: `0004000000126300`
-- Release archive: `MH4U_USA_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`
-- ZIP SHA-256: `C0058F7072850B2E5007324554B0AEA8C404B0CB3E40CD17A6B20B6B3CBCF303`
-- `code.ips`: 698 bytes, 6 records
-- `code.ips` SHA-256: `683B2AD2A378CA404CA7976F6D3E6721397A77FAB3357AB2C019CEFB5ED932FE`
-- 640-byte overlay SHA-256: `E529D92B9ECFD8BE21D084A87250EC426DF0C1091C0F488AFF72B145783E1F0A`
-- Stick-input fifth hook: `00CC33B4=EA04A574 -> 00DEC98C`
-- Clean automatic loading, CPU-JIT-on operation, and an approximately 22-minute mixed gameplay regression passed; all five final state words were zero.
+V3 was therefore not a discarded mistake. It was the functional baseline that made the more precise v4 mechanism possible. The withdrawn “v4” repack and the final real v4 are distinguished explicitly in [Research History](docs/RESEARCH_HISTORY.md).
 
-### MH4U EUR v1.1 — ExeFS v3, both no-stick and stick-input branches covered
+## Documentation
 
-- Title ID: `0004000000126100`
-- Release archive: `MH4U_EUR_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`
-- ZIP SHA-256: `D6350D54B3CF27804575DB46CFF770580FC1438240887DF2786CB0F3A63E1793`
-- `code.ips`: 698 bytes, 6 records
-- `code.ips` SHA-256: `56B266F5FA86346D79339EE84258FC878B23B49408684B7B6DF3237AB3024AB2`
-- 640-byte overlay SHA-256: `FB318D5158E4028C45F5FB173D32D9FC5E46D9E179E0FD521D257FAA13949853`
-- The formal IPS is byte-identical to the dynamically tested RC1 candidate; deterministic double-build and in-archive file validation passed.
-- Clean automatic loading, CPU-JIT-on operation, and an approximately 10-minute mixed gameplay regression passed.
+- [Technical Analysis](docs/TECHNICAL_ANALYSIS.md)
+- [Research History](docs/RESEARCH_HISTORY.md)
+- [Porting Notes](docs/PORTING_NOTES.md)
+- [Development Methodology and Contributions](docs/DEVELOPMENT_METHODOLOGY.md)
+- [Release Artifacts and Checksums](ARTIFACTS.md)
+- [Release Notes](RELEASE_NOTES.md)
+- [Documentation Rewrite Summary](DOCUMENTATION_REWRITE_SUMMARY.md)
+- [Research Archive Guide](archive/README.md)
 
-## Documentation boundary
+## Research environment
 
-`archive/current_state_research_archive.md` is a frozen chronological field archive. It intentionally preserves provisional interpretations, failed routes, later corrections, and a prepended closure chapter written before the USA/EUR v3 release work was fully reflected there. The closure chapter remains authoritative for the MH4G main-research decision at its freeze point, but its old USA/EUR status is superseded by this README, `RELEASE_NOTES.md`, and the edited documents under `docs/`. Do not use the raw archive directly as the public README.
+Azahar 2126.0 was the validated dynamic-research baseline. Earlier builds could not maintain a sufficiently stable GDB connection. Even on 2126.0, conventional breakpoints and watchpoints were not reliable enough for primary data collection, so the project relied on automated GDB scripts, temporary code hooks, bounded loggers, memory exports, and word-for-word readback.
 
-## Development methodology and contributions
+The final ExeFS patches do not require GDB. A validated research baseline should not be interpreted as a proven minimum Azahar version for ordinary play.
 
-This project combined AI-produced reverse-engineering analysis and implementation with human-operated runtime experiments. ChatGPT/Codex produced the project-authored analysis, experiment designs, scripts, ARM hook/overlay implementation, builders, validators, and documentation drafts. The project author operated Azahar/GDB, collected all live data, executed the gameplay comparisons, classified samples, and performed final runtime acceptance. See [Development Methodology and Contribution Disclosure](docs/DEVELOPMENT_METHODOLOGY.md) for the full boundary.
+## Contributions and acknowledgement
 
-## Acknowledgements
+ChatGPT/Codex produced the project-authored static analysis, experiment designs, GDB scripts, ARM hooks and caves, builders, validators, regional relocations, and documentation drafts. JackUnderTheHood operated Azahar/GDB, collected runtime data, performed gameplay comparisons, classified samples, identified visible failures, and completed final runtime acceptance.
 
-Special thanks to YouTube user [Hazerou](https://www.youtube.com/@hazerou8601). His two-part MH4U Charge Blade cheat-code material provided important leads that helped this project get started. It also later helped identify that fast and morph actions use separate branches depending on whether the left stick is left neutral or moved. The project subsequently recorded and validated those Action IDs and entry structures independently in the running MH4G Japanese/localized v1.2 build.
+Special thanks to Hazerou. Publicly shared MH4U Charge Blade Gateshark material provided an important early lead and helped draw attention to the separate action branches used when the left stick is not moved and when it is moved. This project later recorded the action identities, located each regional implementation, and tested every supported build independently. No Hazerou code or assets are included in the releases.
+
+## Document boundary
+
+The public documents summarize verified findings and clearly stated remaining limits. The original `current_state.md` is a research-site archive larger than one million bytes. It contains candidate hypotheses, failed experiments, later-retracted interpretations, and historical next-step notes, so it should not be used directly as a README or final technical explanation.
