@@ -1,195 +1,125 @@
-# MH4G / MH4U Charge Blade Research History: From Single-Field Guesses to ExeFS v3 Covering Both Input Branches
+# Research History: From v3 Identity Overlay to Native-Timing v4
 
-This document organizes the work by causal phase. The complete turn-by-turn record is preserved in `../archive/current_state_research_archive.md`; the untouched pre-closure copy is `../archive/current_state_original.md`.
+This document does not reproduce the million-byte `current_state.md` line by line. It preserves the turning points that changed the investigation. Detailed candidates, failed builds, and operating notes remain in the archived research record. The raw `reports/` files referenced there belong to the local evidence set and are not all included in this public documentation package.
 
-For the explicit division between AI analysis/implementation and human runtime testing/data collection, see [Development Methodology and Contribution Disclosure](DEVELOPMENT_METHODOLOGY.md).
+## 1. V3 completed the first full feature loop
 
-The mechanism-discovery phase took place in the **localized MH4G v1.2 environment**. The later timeline also includes independent MH4U USA/EUR v1.1 relocation and acceptance work. Research logic, tooling, and experimental discipline were reused across builds; MH4G addresses and patch files were not.
+V3 already delivered:
 
-Early “current conclusion” and “next step” sections in the archive describe their historical moment. They do not override the current release status in this history, the public README, and `RELEASE_NOTES.md`. The archive's prepended closure section remains authoritative for the MH4G main-research decision at its freeze point, while its then-current USA/EUR status was later superseded by the completed regional v3 releases.
+- fast morph both without moving the left stick and while moving it;
+- fast animation, GP, red-shield burst, and primary follow-ups;
+- morph/fast-morph action isolation;
+- repeated use and state recovery;
+- ExeFS releases for MH4G JPN/localized, MH4U USA, and MH4U EUR.
 
-## Enabling condition: Azahar 2126.0
-
-The project could not be completed from the static listing alone. Action identity, motion sequences, resource-override lifetime, consecutive re-entry, and safe cleanup all required runtime evidence through GDB. Earlier Azahar versions could not maintain a sufficiently stable GDB connection for sustained capture, patch readback, controlled comparisons, and reliable restoration after failed experiments.
-
-Azahar 2126.0 provided the first debugging baseline the project could depend on for repeated `preflight → install → read back → execute → inspect state → restore` cycles. From a research-engineering perspective, this was a critical infrastructure change that made the project viable and ultimately finishable. It is documented as the research/reproduction baseline; the final ExeFS mod does not require players to connect GDB, so it does not by itself establish the minimum Azahar version for normal play.
-
-The archive records the explicit switch to 2126.0 on August 10. This enabling condition is placed before the chronological sections deliberately: it is the project's retrospective reproducibility baseline. Earlier unstable sessions produced useful partial observations, but they did not provide a dependable conventional debugging foundation on which safe, repeatable research could be published.
-
-The improvement in 2126.0 was that the connection, pause control, and guest-memory access finally became stable enough to use; it did not make conventional breakpoints and watchpoints dependable as the primary reverse-engineering method. Breakpoints could still end in remote `E01` errors or failed continuation. Watchpoints repeatedly trapped on same-address, same-value writes in high-frequency state updates. Manual stepping also could not reproduce long action chains reliably. The project therefore moved to purpose-built GDB scripts and runtime instrumentation: preflight/enable/status/disable scripts managed experiment lifecycles, temporary code hooks and bounded loggers captured motion/Action sequences, snapshots and chunked exports supported offline analysis, and in-game GP, burst, animation, and follow-up behavior completed validation.
-
-## 2026-08-03: Building a usable map of the action system
-
-The work began with an approximately 197 MB, 3.4-million-line Ghidra listing. The project built a SQLite index, function extraction, cross-reference search, function comparison, and ARM32 branch encoding tools. This reduced the initial search to action creation, Action routing, and runtime state.
-
-The first phase confirmed:
-
-- `Player+0x11A8` as the current Action;
-- fast-morph/morph Actions with no stick input, `000B0400/00060400`;
-- `Player+0x28C` as the action frame and `Player+0x234` as freeze/resume control;
-- `Player+0xA300` as the red-shield amount;
-- red-shield phial burst as stronger GP evidence than the final Action alone.
-
-The first partial positive was a state-field experiment rather than the final mechanism. At `state+0xF0`, `0x10` opened defense, `0x2000` alone did not, and `0x2010` together produced the improved knockback behavior expected of GP. The fast move could then defend while retaining its Action and animation, but red-shield contact still produced no phial burst. This proved that copying the observed defense bits recreated only part of GP, not the complete native path.
-
-Directly replacing the fast Action, copying other candidate fields, or branching to a statically plausible handler likewise did not satisfy all requirements. Unstable remote connections, unreliable conventional breakpoints/watchpoints, and JIT code caching established the final method: use Azahar 2126.0 as the reproducible transport and memory-access baseline, but collect evidence primarily through automated scripts, temporary hooks, bounded loggers, snapshots, machine-code readback, and in-game causal controls.
-
-## 2026-08-04 to 08-05: Ruling out a hidden burst switch in hit results
-
-The project compared morph GP, fast-morph hits, red-shield on/off state, Guard-result scripts, retained event slots, collision objects, and transient fields. The important outcome was not a new switch but several exclusions:
-
-- a final group-5 Action can be overwritten by a later hit and cannot prove GP by itself;
-- red-shield state explains whether a burst appears but cannot create a missing Guard window;
-- many morph/fast-morph differences in the result layer are consequences or correlated state, not the GP cause;
-- no observed persistent flag could simply be copied into the fast move mid-action.
-
-Two particularly useful negative controls were changing the fast Guard result from `4` to the morph result `3`, and injecting the Charge Blade event `0x51` after a Guard result. The first reproduced the result Action without a burst; the second also produced no burst. Clean red-shield on/off snapshots likewise found no stable derived Boolean that could be copied. These tests separated defensive result handling and visible burst consequences from the earlier action/motion cause.
-
-The main line therefore moved from “what happens after contact” back to “how initialization and motion lifetime place the Guard system in the correct context.”
-
-## 2026-08-06: First separation of logic and animation
-
-Running the fast active handler with `mode=0` first produced the morph animation, GP, and red-shield burst. This was the key causal turn: morph logic could produce the desired defense, but direct reuse destroyed the fast visual identity.
-
-Tracing the shared handler and submission path showed that `0x592` entered the generic chain as a complete motion/resource identity rather than a local Boolean.
-
-The target changed from “copy the morph handler” to “preserve morph logic identity while substituting fast visual resources.”
-
-## 2026-08-07: `0x592`/`0x583` and the first complete positive prototype
-
-Static and dynamic analysis of motion resource tables, root objects, and submission functions confirmed independent resources for `0x592` and `0x583`. Combining the `0x592` logical context with fast resources produced the first simultaneous result of:
+Its key observation was:
 
 ```text
-fast Action
-+ fast animation
-+ native GP
-+ red-shield phial burst
-+ primary follow-ups
+morph: 0x592 → 0x583
+native fast morph: 0x583
 ```
 
-The phase and descriptor experiments around that prototype established that:
+Five hooks and a 640-byte overlay gave the fast action the logical context associated with `0x592` for a bounded lifetime while retaining the visible fast resource from `0x583`. That combination was sufficient for the existing Guard and red-shield systems to produce the target behavior.
 
-- phase 0 had to remain active through the defensive contact for GP;
-- phase 1 also carried visible transition, sound, and follow-up logic and could not be deleted wholesale;
-- same-tick or early phase-1 submission made the logical context too short for GP;
-- duplicate submission, sentinel replacement, or crude phase removal caused double animation, missing transition, broken follow-ups, or crashes.
+One mechanism question remained: why did the full `0x592` context produce GP plus burst, while the early native-fast state-bit experiment could guard but not burst?
 
-This proved the overall direction, but a global resource alias also changed the morph into the fast animation. Restoring too early recreated double animations. The problem became one of scope and lifetime: only the fast entry should establish the override, and it had to survive until the correct action boundary.
+## 2. 2026-08-13: strict A/B comparison
 
-## 2026-08-08: Replacing function-name guesses with motion logging
+V4 research did not immediately alter the released v3. Instead, two conditions were alternated inside one controlled runtime:
 
-A low-noise logger on the shared submission path recorded:
+- A: formal v3, with complete fast GP and red-shield burst;
+- B: native fast identity plus the early guard-state experiment, which guarded but did not burst.
+
+Samples were collected in short alternating batches and separated by recoil class. Any batch contaminated by a still-enabled experimental code was discarded.
+
+The stable difference showed that both conditions could guard, while only A burst. Work therefore narrowed from broad post-hit field guessing to bounded differences between preparation timing, contact identity, and successful-result submission.
+
+## 3. Removing noise from high-frequency traces
+
+Small fixed-capacity loggers recorded only selected events: phase-0 calls, motion-getter callers, successful-contact identity, event dispatch, native call edges, and `state+0x489 bit 2` production or consumption.
+
+Many important results were negative:
+
+- some getters could compare `0x583/0x592`, but their actual call sites did not request `0x592`;
+- some functions could theoretically create related side effects, yet two real red-shield burst samples never traversed the relevant native call edges;
+- modifying a guard result or calling a candidate function after the result could not reconstruct the burst.
+
+These controls prevented “the function can do this” from being rewritten as “this action depends on it.”
+
+## 4. Identity A/B found two key reader groups
+
+The experiment temporarily changed what the motion getter returned to selected callers without changing the real motion value in memory. Narrowing the caller list showed that one group of code needed to read `0x592` for GP, while another needed it for the red-shield burst. Keeping only one side produced either GP without burst or no accepted guard; keeping both restored full behavior.
+
+However, the apparently symmetric candidate—starting from native `0x583` and returning `0x592` only to those two callers—failed. Animations remained correct, but GP did not appear.
+
+Two bounded probe rounds then closed this route:
+
+- **RC1** tried to raise `0x583` to `0x592` only for the known readers at `CA7864` and `CA8914`. One native fast action produced 2,777 getter calls that passed the common filters, but neither target caller appeared at all. Those callers occur only after the flow has already entered the `0x592` lifecycle; they cannot start that lifecycle from native `0x583`.
+- **RC2** added the earlier `AEE784` identity-comparison site. It was reached 183 times, yet `CA7864` and `CA8914` remained at zero. Animation stayed normal, but GP was still absent.
+
+The failure was therefore not a simple branch-encoding mistake. The assumption that getter-return aliases alone could bootstrap a complete `0x592` lifecycle was false. The project stopped enumerating getter callers and returned to the native state-establishment timing.
+
+This failure was valuable: a static symmetry was not promoted into a runtime claim.
+
+## 5. Finding an earlier native timing point
+
+Logging the Action, requested mask, and pre-call state before `B56160` applied a mask showed that native fast morph already made a usable mask-2 call.
+
+Strictly filtering the current player, fast Action, `mask=2`, and pre-call `F0=1`, then expanding only that mask to `0x2012`, gave native fast morph a GP without changing motion identity. This became the final v4 method for making the GP guard check active.
+
+## 6. Separating guard acceptance from GP performance
+
+On 2026-08-15, two causal links were completed:
+
+1. Hiding `bit 0x10` only during `B018A8 -> B54EE0` left guard sparks visible but made both fast GP and held-R guarding fail to block the attack. Restoration recovered both.
+2. Static and runtime checks showed `B2804C` consumes `bit 0x2000`, reducing the internal recoil-classification value by 10 (minimum 1), after which `B0E5B0` and `B23B48` select recoil class and displacement.
+
+GP could now be described as native timing that establishes guard acceptance plus a separate GP recoil adjustment—not a single magic flag.
+
+## 7. Closing the red-shield burst chain
+
+Tracing from `state+0x489 bit 2` connected burst-object creation, embedded active collision, collision-list registration, entity resolution, hit-result accumulation, result-queue consumption, and final target-HP reduction.
+
+The visible burst was therefore backed by a complete effect, collision, and damage chain.
+
+## 8. The first “v4” repack was withdrawn
+
+After the mechanism was documented, v3's five-hook bytes were briefly repackaged with v4 mechanism documents under a v4 filename. The user correctly rejected this as not being a true v4 implementation.
+
+That archive was moved to history and marked:
 
 ```text
-morph:      592 → 583
-native fast:     583
+WITHDRAWN_NOT_TRUE_V4
 ```
 
-This reduced the critical difference from a large set of shared functions to motion identity and resource lifetime. The project then paired fast-morph and morph entry tails and designed an overlay established only by the fast entry and restored through motion/action boundaries.
+It was never treated as the final v4 release. This explains an apparent contradiction in the raw history: “v4 equals v3 bytes” refers only to the withdrawn documentation repack; “v4 is a new two-hook implementation” refers to the final release.
 
-The broader lesson was that a move visible to the player does not necessarily correspond to a dedicated function. Action, entry parameters, motion, resources, collision, and results need separate instrumentation.
+## 9. Final Fast Morph GP v4
 
-## 2026-08-09: Converging from unstable prototypes to v6
+Final v4 uses two hooks: one at native mask timing and one at successful fast-GP contact for the red-shield condition. It preserves native Actions `000B0400` and `001C0400`, does not rewrite motion identity, and does not need v3's 640-byte overlay.
 
-Several overlay revisions exposed three engineering problems:
+After Japanese acceptance, USA and EUR were independently mapped and tested for animations, non-red/red GP behavior, single bursts, follow-ups, held-R guarding, readback, and safe restoration.
 
-- re-entrant versions could crash, requiring exact LR, literal, and return-boundary verification;
-- a dormant marker could make a later morph `592` use fast resources;
-- clearing on every non-`583` motion removed the fast move's own required initial `592`.
+## 10. Cross-validating the model with sword-mode charge slash
 
-Bounded motion logging produced the decisive prefixes:
+The next goal was to add GP to an action that did not originally have it: sword-mode charge slash.
 
-```text
-standalone fast:    592 → 583
-fast GP follow-up:  592 → 592 → 583 → 579 → 56B
-later morph:        567 → 592
-```
+Logging identified native mask timing during Action `00340400`, while the shield is held forward. At first, every successful guard switched to a recoil reaction and interrupted charging. Result observation then identified small, medium, and large recoil as substates 3, 4, and 5. The final patch blocks the small/medium transitions, 3 and 4, so charging continues, while leaving substate 5 to perform the game's normal large-recoil interruption.
 
-v6 introduced the A/B/C prefix state machine: valid fast prefixes continue, while the morph `567` clears a dormant marker before the morph `592`. Strict consecutive GP, morph-animation isolation, red-shield bursts, knockback consistency, axe slam, roundslash, discharge, and state recovery all passed.
+Leaving `state+0x489 bit 2` pending risked delayed consumption, so the final charge implementation directly calls the regional native burst submitter after confirming the charge Action, successful result, and red-shield timer.
 
-The same day, the 640-byte v6 overlay was packaged as Azahar ExeFS v2 and completed no-stick-input four-hook automatic-load and extended testing.
+The new feature passed in all three regions. This demonstrated that the GP activation timing, recoil, and burst model could be reused outside the original fast-morph action and became the strongest cross-validation of the research.
 
-## 2026-08-09: The stick-input branch explains the old intermittent failure
+## 11. Regional ports and the EUR crash confound
 
-Runtime reads revealed four isomorphic entries `(0,0)/(0,1)/(1,0)/(1,1)`. The fast morph with stick input, `001C0400`, used its own `(1,1)` entry and bypassed the old no-stick fast-entry hook completely.
+USA and EUR were mapped from their own runtime images. Functions, player-root slots, Actions, branches, and caves were verified independently; no uniform offset or renamed Japanese IPS was used.
 
-The Action logger independently captured `001C0400` for the stick-input fast route and `00040400 → 001B0400` for sword X into the stick-input morph. A motion logger then supplied a controlled structural comparison: under the installed four-hook patch, the already patched no-stick fast route recorded `592 → 583`, while the still-unpatched stick-input fast route produced zero entries at the existing native wrapper under the same logger installation. The zero result therefore demonstrated bypass rather than logger failure.
+During EUR testing, climbing twice crashed at `B96990`. Testing stopped because the patch could not initially be excluded. The user later disclosed a simultaneously enabled cheat that wrote a USA address, `00B96958`, into the EUR build, overwriting a required instruction in the EUR climbing function.
 
-Special thanks to YouTube user Hazerou. His MH4U USA Gateshark material was one of the important external leads that helped the project get started; it also contained the `001C/001B` fast/morph IDs used when the left stick is moved. That reference guided comparison but was not treated as executable-address evidence; the MH4G runtime logger subsequently established the identities independently.
+After a full cold restart removed that write, the same GP candidate remained installed and the same climbing route succeeded five consecutive times. The full feature matrix then passed. The crash was therefore attributed to the wrong-region cheat, not this patch. This episode remains documented because it demonstrates how an apparent patch crash was separated from an external confound.
 
-Adding the fifth hook at `00CA830C` preserved the longer forward-moving fast animation while producing stable GP and red-shield bursts. Three consecutive stick-input fast-morph GPs, stick-input morph isolation, primary follow-ups, and state recovery passed. The final ExeFS v3 then passed clean Azahar automatic loading and extended play with CPU JIT enabled.
+## 12. 2026-08-16: formal completion
 
-The primary explanation for the old stick-related failures changed from “the fast move naturally lacks an opening GP” to “the stick-input fast branch was not covered.”
+Six final packages were completed: standalone Fast Morph GP v4 and combined Charge Slash GP v1 for each of three regions. Every archive was deterministically built from runtime-tested machine code and independently rehashed.
 
-The finalized MH4G package uses Title ID `000400000011D700`: `MH4G_JPN_v1.2_CB_Fast_Morph_GP_v3_Azahar.zip`. Its initial archive SHA-256 was `3D5B864D160497167D2CBD2A3BB6F33128A20A9A6E57CD3940C83387A5BDA941`; its `code.ips` is 698 bytes / 6 records, SHA-256 `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4`.
-
-## 2026-08-09: USA no-stick-input v2 proves the regional porting method
-
-Once the MH4G mechanism stabilized, the project tested the porting method rather than copying addresses. A verified 13,627,396-byte USA runtime export was searched offline for full signatures, decoded branches, action-entry structure, and a safe unreferenced cave. This produced a separately relocated four-hook, no-stick-input ExeFS v2 followed by automatic-load and gameplay acceptance. It established that behavior could be transferred while every executable address, external branch, absolute state pointer, and IPS record remained build-specific.
-
-## 2026-08-10: Closing the window question
-
-The project briefly planned to trim the late end of the fast GP window to a chosen frame. The investigation discovered an important methodological error: jumping directly from initialized frame 0 to a target frame skips natural motion/animation events and can preserve an already-open GP state artificially. Late positive samples produced by that method were withdrawn as natural-window evidence.
-
-Natural-progress runtime capture and contact classification then established a conservative boundary: the latest trustworthy positive was frame `27.0`; the earliest classified negative was approximately `30.006`, independently repeated at approximately `30.008`; frames 28–29 remained unresolved. The existing morph reference was positive at `32.5` and negative at `33.0`. The user also compared the result against the official MHGU fast morph with stick input. The final findings were:
-
-- the official MHGU fast morph with stick input also has a GP;
-- its late-window feel is close to the current MH4G v3 behavior;
-- the current MH4G v3 fast GP window is in practice shorter than the morph window.
-
-The manual trimming task was therefore cancelled. It is confirmed that the fast window does not simply inherit the entire morph window. Natural termination through lifecycle, phase, or motion change is a strong interpretation, but the exact close condition remains unidentified.
-
-The earlier suspicion of a separate inherent GP gap at fast-morph startup was also downgraded. The uncovered stick-input branch explains the old repeatable failure much better; the project did not prove a fixed native startup gap.
-
-## 2026-08-10: USA v3 adds the previously uncovered stick-input branch
-
-The four adjacent USA entry stubs then exposed the stick-input fast entry. The fifth hook was independently encoded as `00CC33B4=EA04A574 → 00DEC98C`; it reused the relocated 640-byte behavior but did not reuse the MH4G IPS record or address. A clean-boot ExeFS RC1 was applied before CPU JIT compiled the guest blocks.
-
-The approximately 22-minute mixed regression covered no-stick/stick-input and morph/fast-morph switching, two consecutive stick-input fast GPs, three consecutive stick-input morph GPs, red-shield bursts, discharge, axe slam/roundslash, rolling, area transitions, and combat recovery. The final five state words were zero. RC1 was promoted byte-for-byte to formal ExeFS v3 for Title ID `0004000000126300`, archive `MH4U_USA_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`:
-
-- initial archive SHA-256: `B8C9D2B9F48E0F277BBBB5E2449E8EC110F8728A8AA6DF44B58AEF3B72F7B787`;
-- `code.ips`: 698 bytes / 6 records, SHA-256 `683B2AD2A378CA404CA7976F6D3E6721397A77FAB3357AB2C019CEFB5ED932FE`.
-
-## 2026-08-10 to 08-11: EUR rejected same-address reuse and completed independently
-
-The Hazerou EUR Gateshark reference further supported the same gameplay-level Action ID combinations and supplied the EUR player root, but it could not locate executable hooks. A bounded read-only probe first proved that EUR did **not** share the USA hook addresses. The project therefore exported and verified its own 13,627,396-byte EUR runtime image, mapped five hooks and external targets independently, and selected a separately validated zero cave.
-
-The first installer readback occurred at the title screen rather than with an idle hunter in a quest. It was retained only as installation-format evidence and explicitly rejected as execution or safety evidence. Testing restarted from a clean quest-map process: the CPU-JIT-off GDB candidate passed both stick-input branches, GP, bursts, follow-ups, consecutive use, and state recovery, then restored the original hooks and zero cave safely. A clean automatic-load ExeFS RC1 subsequently passed an approximately 10-minute CPU-JIT-on mixed regression and ended with all five state words zero.
-
-The tested RC1 IPS was promoted unchanged to formal EUR ExeFS v3 for Title ID `0004000000126100`, archive `MH4U_EUR_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`:
-
-- initial archive SHA-256: `5ECF2013568EA64C133DFCA7374FDDD580C67A869C388265719629DCFC4EB39B`;
-- `code.ips`: 698 bytes / 6 records, SHA-256 `56B266F5FA86346D79339EE84258FC878B23B49408684B7B6DF3237AB3024AB2`.
-
-## 2026-08-11: Formal research closure
-
-On 2026-08-11, the project confirmed three finalized releases covering both the no-stick and stick-input branches: MH4G Japanese/localized v1.2, MH4U USA v1.1, and MH4U EUR v1.1. The generic `0x592` GP mechanism and other-weapon transplantation moved to open questions rather than remaining release gaps.
-
-The research objective is closed. Exact `0x592`/Guard causality and other-weapon GP transplantation remain future research questions, not unfinished requirements for these releases. The next stage is publication engineering: final regression as needed, comparison video, release packaging, and bilingual public documentation. The frozen `current_state` files remain research-site archives and are not substitutes for a public README.
-
-## 2026-08-12: Documentation-only package refresh
-
-The three release archives were rebuilt to replace older neutral/directional user-facing terminology with direct left-Circle-Pad descriptions. Their filenames and all tested machine code remained unchanged: the `code.ips` sizes, records, SHA-256 values, overlays, hooks, and runtime conclusions are identical. The current downloadable ZIP SHA-256 values are:
-
-- MH4G JPN/localized v1.2: `60616F01515BF84BE8FCCB8206AA6123467B8C48F251BE9CA4625002FC0ACCBC`;
-- MH4U USA v1.1: `C0058F7072850B2E5007324554B0AEA8C404B0CB3E40CD17A6B20B6B3CBCF303`;
-- MH4U EUR v1.1: `D6350D54B3CF27804575DB46CFF770580FC1438240887DF2786CB0F3A63E1793`.
-
-The earlier ZIP hashes above remain in this history as identifiers for the initially packaged archives; they are no longer the hashes of the current GitHub release downloads.
-
-## Major failed routes and what they taught
-
-| Route | Result | Lasting conclusion |
-| --- | --- | --- |
-| Conventional breakpoint/watchpoint tracing | Remote `E01`, failed continuation, or repeated same-value traps | Use scripted hooks, bounded loggers, readback, and behavioral controls as the primary evidence path |
-| Copy a single state field or flag | Partial defense without burst, no effect, hit reaction, or broken pose | No single copied bit recreated the complete native GP path |
-| Replace Action or handler directly | Animation changed, target behavior incomplete | Action identity, initialization, and external systems are coupled |
-| Modify Guard results or event scripts | Could not create the missing window | The result layer is not the GP root cause |
-| Delete or submit phases early | Double animation, missing transition, broken follow-ups, or crash | Phases carry both presentation and gameplay logic |
-| Globally alias `0x592` to fast resources | GP worked but the morph animation was contaminated | Correct causal direction, wrong scope |
-| Clear the marker too early | Fast move degraded into the morph animation | Cleanup must recognize valid motion prefixes |
-| Jump directly to a target frame | Natural events were skipped and positives became invalid | Window measurement must allow natural progression |
-| Assume regional executable layouts match | EUR differed at the USA reference addresses | Shared gameplay identities do not authorize address or IPS reuse |
-| Accept title-screen installer readback as runtime proof | No hunter action could execute there | Installation evidence and gameplay/safety evidence must be recorded separately |
-
-These failures are among the most reusable project outputs. They redirect future work away from a mythical single GP function and toward layered validation of entries, motion, resource lifetime, and the Guard system.
+The main research objective is closed. Dedicated multi-hit-monster coverage and the player-visible names of generic queries 98/99/100 remain explicit limits, but neither changes the verified GP/recoil/burst chain.

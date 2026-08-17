@@ -1,141 +1,66 @@
-# MH4G / MH4U Charge Blade Porting Notes for Regions and Revisions
+# Porting Notes: MH4G JPN, MH4U USA, and MH4U EUR
 
-This document is for researchers porting the finalized MH4G Japanese/localized v1.2 design to another region or revision. It is not a copy-and-paste address list.
+## 1. Port the structure, not the addresses
 
-## 1. Authoritative version status
-
-| Target | Status |
-| --- | --- |
-| MH4G Japanese/localized v1.2 | ExeFS v3 covering both no-stick and stick-input branches; main research closed |
-| MH4U USA v1.1 | ExeFS v3 covering both no-stick and stick-input branches; automatic loading, CPU-JIT-on operation, and an approximately 22-minute mixed gameplay regression passed |
-| MH4U EUR v1.1 | ExeFS v3 covering both no-stick and stick-input branches; automatic loading, CPU-JIT-on operation, and an approximately 10-minute mixed gameplay regression passed |
-
-The formal EUR v3 archive is `MH4U_EUR_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`, current SHA-256 `D6350D54B3CF27804575DB46CFF770580FC1438240887DF2786CB0F3A63E1793`. Its `code.ips` is 698 bytes / 6 records, SHA-256 `56B266F5FA86346D79339EE84258FC878B23B49408684B7B6DF3237AB3024AB2`; its 640-byte overlay SHA-256 is `FB318D5158E4028C45F5FB173D32D9FC5E46D9E179E0FD521D257FAA13949853`. The formal IPS is byte-identical to the dynamically tested RC1 and passed deterministic double-build and in-archive file validation. The 2026-08-12 ZIP refresh changed only user-facing Circle Pad wording.
-
-The formal USA v3 archive is `MH4U_USA_v1.1_CB_Fast_Morph_GP_v3_Azahar.zip`, current SHA-256 `C0058F7072850B2E5007324554B0AEA8C404B0CB3E40CD17A6B20B6B3CBCF303`. Its `code.ips` is 698 bytes / 6 records, SHA-256 `683B2AD2A378CA404CA7976F6D3E6721397A77FAB3357AB2C019CEFB5ED932FE`; its 640-byte overlay SHA-256 is `E529D92B9ECFD8BE21D084A87250EC426DF0C1091C0F488AFF72B145783E1F0A`. The stick-input fifth hook is `00CC33B4=EA04A574 -> 00DEC98C`; an approximately 22-minute CPU-JIT-on mixed regression passed and all five final state words were zero. The 2026-08-12 ZIP refresh changed only user-facing Circle Pad wording.
-
-The existence of candidate scripts, RC archives, or later experimental artifacts does not automatically promote them to an authoritative release. A build becomes formal only after independent mapping for that version, dynamic validation, automatic-load regression, and explicit confirmation in the current public release-status documents, supported by the appropriate dated archive evidence. The frozen archive's prepended closure section must not be used by itself to downgrade a later completed port.
-
-## 2. Debugging-environment prerequisite
-
-The project's verified research baseline is **Azahar 2126.0**. Earlier versions could not maintain a stable enough GDB connection for sustained dynamic reverse engineering. Before beginning a regional port, verify that the selected emulator build can reliably handle repeated pause/continue cycles, guest-memory reads and writes, bounded code export, word-for-word patch readback, and safe restoration. If it cannot, fix or replace the debugging environment first; do not interpret connection failures as evidence that a target function is absent or a patch has tested negative.
-
-Azahar 2126.0 is the recommended known-working baseline. Another emulator build may substitute only after equivalent stability has been demonstrated. This requirement applies to research and porting and does not automatically define the minimum player-facing version for the final ExeFS mod.
-
-Do not confuse “GDB can connect” with “a port can be completed by conventional breakpoint/watchpoint stepping.” Even on 2126.0, interactive breakpoints and watchpoints remained unreliable auxiliary diagnostics that could produce remote errors, failed continuation, and high-frequency or same-value-write noise. Porting should favor the scripted workflow used by this project: read-only preflight, recoverable enable/status/disable, temporary code hooks, bounded loggers, memory snapshots, chunked exports, and offline branch validation, with runtime behavior and final state checking each other.
-
-## 3. Do not copy MH4G addresses directly
-
-The final JPN v1.2 hooks are:
+The three builds share Action semantics and substantial function structure, so the verified behavioral design is portable:
 
 ```text
-00941334  resource overlay
-00B0D0A0  native motion wrapper
-00CA82EC  no-stick fast entry
-00CA830C  stick-input fast entry
-00CAC478  action finish wrapper
+native GP mask timing
+→ guard acceptance and GP recoil adjustment
+→ red-shield condition after successful fast contact
+→ charge-result classification and direct native burst submission
 ```
 
-These are **JPN v1.2 runtime addresses**. Another region may retain similar Action IDs, function shapes, or relative distances while moving every executable address. In particular, `00CA830C` must never be written directly into USA/EUR.
+Function addresses, player-root slots (where the current player pointer is stored), branch distances, and usable blank code areas, or code caves, can differ. A port must not be made by changing only the Title ID, renaming an archive, assuming one global address delta, or copying a Gateshark address from another region.
 
-Porting should use full instruction context, call relationships, and decoded branch targets rather than one four-byte signature. A single ARM word is not unique enough in a large executable.
+The actual mappings demonstrate why one global delta is unsafe. From JPN to USA, for example:
 
-## 4. Semantic objects that must be relocated
+```text
+B56160 → B6D440   +0x172E0
+B05488 → B1C6A0   +0x17218
+CA92A8 → CC4350   +0x1B0A8
+```
 
-Every target build must independently confirm:
+Those deltas differ. The selected USA-to-EUR core functions later happened to map at `+0x50`, but that was the result of independent signature verification for each function, not a presumed regional rule. Player-root slots, caves, and all other code still require separate checks.
 
-- exact game revision, Title ID, and code load base;
-- player-pointer root and Action read path;
-- fast-morph/morph Action identities with no stick input and with stick input;
-- the four isomorphic morph-entry stubs and their `(direction, fast)` axes;
-- resource-submission entry and original prologue;
-- native-motion submission callsite;
-- action-finish/recovery callsite;
-- a sufficiently large safe code cave;
-- every external branch and absolute-address literal in the overlay;
-- runtime-address to IPS-offset conversion.
+## 2. Core mapping for the released builds
 
-The existing research provides cross-version leads for two Action ID combinations: `000B/0006` when the left stick is neutral and `001C/001B` when it is moved. They still require target-build confirmation through runtime recording or equivalent target-build entry mapping plus behavioral isolation. External cheat-code material is not sufficient proof by itself.
+| Item | MH4G JPN/localized v1.2 | MH4U USA v1.1 | MH4U EUR v1.1 |
+|---|---:|---:|---:|
+| Title ID | `000400000011D700` | `0004000000126300` | `0004000000126100` |
+| Player-root slot | `0106C3F4` | `081C7CD0` | `081C8140` |
+| GP-mask helper hook | `00B56160` | `00B6D440` | `00B6D490` |
+| Fast-contact hook | `00B05538` | `00B1C750` | `00B1C7A0` |
+| Charge-result hook | `00B05488` | `00B1C6A0` | `00B1C6F0` |
+| Native burst submitter | `00CA92A8` | `00CC4350` | `00CC43A0` |
+| Standalone-fast cave | `00DCDEF8..00DCDFFF` | `00DECEF8..00DECFFF` | `00DECEF8..00DECFFF` |
+| Combined cave | `00DCDCE8..00DCDFFF` | `00DECCE8..00DECFFF` | `00DECCE8..00DECFFF` |
 
-## 5. Recommended porting workflow
+These addresses belong only to the exact builds named in the table.
 
-### Phase A: read-only mapping
+## 3. Porting workflow
 
-1. Fix the target ROM region, game update, Title ID, and emulator version; prefer the verified Azahar 2126.0 debugging baseline and confirm stable scripted memory access/readback.
-2. In a quest map, confirm readable runtime code and record the code load base.
-3. Export executable code in bounded chunks; probe a safe chunk size first if the remote stub limits large transfers.
-4. Search offline for complete function signatures, call relationships, and adjacent-entry structure.
-5. Read the four morph-entry stubs and prove the mapping between the two parameter axes and four moves.
-6. Scan candidate code caves and prove that the full range is zero, large enough, and has no known references or incoming branches.
+1. **Export the target build's runtime image.** Verify the game and region first. If Azahar GDB cannot transfer a large block, use bounded chunked exports; do not interpret a failed `find` as proof that a target is absent.
+2. **Locate functions by structure.** Use complete instruction sequences, neighboring control flow, call relationships, and observed Action behavior. A single constant or instruction is not a sufficient signature.
+3. **Validate a cave.** It must be large enough, fully zero at runtime, free of known literals and branch targets, ARM-aligned, preflightable, and fully clearable during restoration.
+4. **Recalculate every jump.** Re-encode each hook-to-cave jump, the return to the original function, the linked call to the native burst submitter, embedded absolute addresses such as the player-root slot, and every conditional or long-distance trampoline target.
+5. **Run static validation before installation.** Confirm displaced-instruction replay, decoded branch targets, CPSR/register/LR preservation, literals, cave size and hash, IPS round trip, and deterministic rebuilds.
+6. **Perform bounded runtime acceptance.** Use cold start, read-only preflight, full readback, minimal no-contact smoke, feature matrix, final status, and safe restoration.
 
-Phase A must not write guest memory or produce a release IPS.
+## 4. Minimum runtime matrix
 
-### Phase B: overlay relocation
+Standalone Fast Morph GP v4 must cover both input-branch animations, non-red GP without burst, red GP with one burst, AED/axe-slam follow-ups, morph/GP/held-R regression, final state integrity, and restoration.
 
-1. Use the validated 640-byte JPN v6 overlay as the behavioral baseline.
-2. Preserve the semantics of internal relative branches and the `592/583` literals.
-3. Re-encode every external branch to the target build's functions.
-4. Update target-specific absolute state or resource addresses.
-5. Verify the source, target, link bit, and range of every ARM B/BL.
-6. Verify an exact 640-byte image and an in-bounds state area.
+The combined package must additionally cover short, normal, and automatic charge releases; non-red small, medium, and large recoil without burst; red small, medium, and large recoil with one burst; continued charging after small/medium recoil; interruption after large recoil; and confirmation that the charge-result filter does not affect held-R guarding or morph attacks.
 
-Do not apply one fixed address delta to the whole design. Every external target must be justified by the target executable's own instructions and call graph.
+Multi-hit attacks remain an explicit test boundary and must not be described as exhaustively covered.
 
-### Phase C: offline build and reverse validation
+## 5. EUR wrong-region cheat case
 
-1. Generate the candidate overlay and IPS.
-2. Parse the IPS back and compare every record offset, length, and little-endian payload.
-3. Generate SHA-256 values for the overlay, `code.ips`, and ZIP.
-4. Decode all branches again and verify their targets.
-5. Confirm reproducibility: two consecutive builds should match, or any non-reproducible metadata source must be documented.
+Two EUR climbing crashes at `00B96990` were eventually traced to an external cheat that used USA address `00B96958` on the EUR build. EUR normally contains required instruction `E58D1008` there, but the cheat replaced it with `E3A00001`. The USA target instruction `E3A01001` corresponds to EUR address `00B969A8`, not `00B96958`. Disabling a UI checkbox did not undo the existing runtime write; a full cold restart was required.
 
-### Phase D: recoverable dynamic candidate
+After the bad write was removed, the same GP candidate remained installed and the same route was climbed five times without a crash, followed by a passing feature matrix. The lesson is broader than this one code: record every simultaneous mutation, do not reuse regional addresses, and do not assume that disabling a code restores already-written machine code.
 
-1. Disable CPU JIT and stop with an idle hunter in a quest map.
-2. Run a read-only preflight that requires every original hook and the complete cave baseline to match.
-3. Write the overlay first, read back signatures and initial state, then install hooks last.
-4. Perform a no-monster fast-animation smoke test first: correct identity, one playback, natural end, no crash.
-5. Test morph-animation isolation next.
-6. Only then test monster GP, red-shield bursts, follow-ups, and consecutive input.
-7. The dynamic candidate needs a safe path that restores original hooks and zeroes the cave.
+## 6. Release engineering
 
-Phase D is the safest default for a new relocation. For a minimal extension to an already dynamically accepted overlay, a clean-boot ExeFS RC applied before guest blocks are JIT-compiled may replace live hot-writing; USA v3 followed this route for its fifth hook. That route still requires target-build mapping, baseline and installed-code readback, behavioral-isolation tests, a rollback path, and the full Phase E acceptance gate. EUR v3 used the CPU-JIT-off recoverable candidate route before ExeFS acceptance.
-
-### Phase E: ExeFS release acceptance
-
-1. Package the exact dynamically tested machine code as `code.ips`; do not change behavior during packaging.
-2. Close the emulator completely before installation.
-3. Clean boot from a normal in-game save without a GDB enable script or a save state.
-4. Read back hooks, overlay, literals, and initial state to prove automatic ExeFS loading.
-5. Complete minimal fast-morph/morph smoke tests, then an extended mixed regression with CPU JIT enabled.
-6. End in a known safe state and document the Title ID, revision, hashes, and save-state restriction.
-
-## 6. Minimum regression matrix
-
-A port covering both the no-stick and stick-input branches should pass at least:
-
-| Category | Required checks |
-| --- | --- |
-| Animation | No-stick fast morph, no-stick morph, stick-input fast morph, stick-input morph; each plays once and ends naturally |
-| GP | Normal Guard regression for all four branches; observe red-shield burst evidence |
-| Consecutive use | At least two strict consecutive stick-input fast GPs with no degradation or alternation |
-| Isolation | Morph animation and GP remain unchanged after a fast-morph chain |
-| Follow-ups | X axe slam/roundslash and discharge; check super discharge where applicable |
-| Lifetime | Action end, re-entry, rolling, sheathing, area transitions, and combat recovery |
-| Loading | Clean automatic ExeFS loading without a debugger |
-| JIT | Extended CPU-JIT-on play with no stutter, crash, or state contamination |
-
-## 7. Promotion gate
-
-If any item below is missing, the build should remain an experimental candidate or RC:
-
-- no independent static/runtime proof of target-build addresses;
-- stick-input fifth entry derived only from a cross-region address guess;
-- machine-code readback passed but the move was never executed;
-- GDB injection passed but clean ExeFS automatic loading did not;
-- only one GP was tested without morph isolation, consecutive input, and recovery;
-- no checksum, Title ID, or explicit save-state restriction.
-
-## 8. Work outside the current porting scope
-
-Giving GP to another weapon is not a regional port; it is new mechanism research. It requires further analysis of the relationship between `0x592` and the generic Guard/collision system, plus proof that the target weapon's lifecycle can safely establish and close the same defensive context. The current Charge Blade overlay must not be treated as a universal template.
+Every region and package type needs its own filename, Title ID, IPS hash, cave hash, archive hash, bilingual README, manifest, internal checksums, and explicit runtime-test status. A combined README must state that Fast Morph GP v4 is already included; a standalone README must state that charge GP is not included. RC, pending, or static-only artifacts must never be labeled as formal releases.

@@ -1,204 +1,183 @@
-# Technical Analysis: MH4G / MH4U Charge Blade Fast Morph GP
+# Technical Analysis: MH4G / MH4U Charge Blade GP and Red-Shield Phial Burst
 
-This document describes the verified structure of the final ExeFS v3 build, the boundary between evidence and interpretation, and the questions that remain open. It is a public-facing synthesis of the research archive rather than a replay of every failed experiment.
+![Guard Point and phial-burst mechanism flowchart](../assets/gp-phial-burst-flowchart.svg)
 
-The division between AI-produced reverse-engineering work and human-operated runtime validation is documented in [Development Methodology and Contribution Disclosure](DEVELOPMENT_METHODOLOGY.md).
+The diagram gives the overall relationship first. The sections below explain when GP can actually block an attack, why GP reduces recoil, how the game confirms a successful contact, and how a red-shield burst reaches damage processing. These are four separate steps, not one switch.
 
-Scope: the mechanism reconstruction, motion sequences, and detailed v6 state-machine explanation were established on the **localized MH4G v1.2 build**. Sections 4 and 6 distinguish those results from the independently relocated and dynamically accepted MH4U USA/EUR v1.1 builds. Gameplay-level action identities are shared across the three targets, but executable addresses, branch encodings, code caves, overlays, and IPS records are build-specific and are not interchangeable.
+## 1. Four mechanisms, not one switch
 
-## 1. The problem was not a standalone “GP switch”
-
-The player sees one fast morph slash, but the implementation spans several layers:
+The early investigation repeatedly ran into the same trap: guard sparks, an attack being blocked, GP reducing recoil, and a red-shield phial burst were treated as if they came from one flag. V4 separated them:
 
 ```text
-input and stick state
-→ action-entry parameters
-→ Action routing
-→ motion / phase submission
-→ resource objects and lifetime
-→ Guard / collision result
-→ red-shield phial burst and follow-ups
+action reaches the point where GP can become active
+→ the game prepares guard acceptance and GP recoil adjustment
+→ monster attack contacts the shield
+→ guard system decides whether the hit is actually blocked
+→ recoil class and displacement are calculated
+→ a successful red-shield GP enters the phial-burst object, collision, and damage path
 ```
 
-Extensive early tests of individual fields, result scripts, collision records, and generic flags did not reveal an independently portable GP switch. The working solution combines morph logic, fast visual resources, and reliable lifetime cleanup.
+This explains why copying a single observed state field produced only partial behavior. A field could affect guard acceptance or recoil without reconstructing the burst path, while changing a result Action could alter the aftermath without making a previously unavailable GP guard check valid.
 
-### 1.1 Azahar 2126.0 made the dynamic method viable
+## 2. When the GP guard check becomes active
 
-The conclusions do not come from static disassembly alone. The decisive causal evidence required action capture, bounded logging, machine-code installation, word-for-word readback, behavior testing, state reinspection, and safe restoration within controlled runtime sessions. That workflow depends on a GDB connection that remains readable and writable across repeated pause/continue cycles.
-
-Earlier Azahar versions could not maintain a sufficiently stable GDB session. Under those conditions, an observed patch result could not be separated reliably from incomplete installation, failure to execute new code, JIT caching, or a remote-connection fault, and failed experiments could not always be restored safely. **Azahar 2126.0 was therefore the verified debugging baseline that made the project viable as a reproducible dynamic-research effort**, not merely an incidental emulator version.
-
-“Usable GDB transport” must be distinguished from “reliable conventional breakpoint debugging.” Azahar 2126.0 solved the basic connection and guest-memory access problem, but interactive breakpoints and watchpoints were still unsuitable as the main evidence-collection method. Breakpoints could be accompanied by remote errors such as `E01`, and continuing could leave the session unusable. Watchpoints could trap on same-address, same-value writes and stop repeatedly during high-frequency state updates. A single stopped frame was therefore not sufficient evidence of an action path or GP boundary.
-
-The final workflow used **scripted instrumentation and recoverable experiments**:
-
-- GDB preflight/enable/status/disable scripts checked the baseline, installed machine code, performed word-for-word readback, inspected state, and restored safely;
-- temporary code hooks and low-noise bounded loggers wrote Action, motion ID, cursor, source, and prefix sequences into allocated log areas;
-- memory snapshots, chunked code exports, and offline SQLite/disassembly analysis supported broad searches and strict comparisons;
-- successful guarding, red-shield phial bursts, animation identity, follow-ups, and state recovery provided final in-game causal acceptance.
-
-A few narrow breakpoints at fixed code points or literal-address watchpoints were tried to validate a diagnostic tool or reduce a candidate set, but they were not the sustainable primary capture route. Every major conclusion ultimately required agreement between scripted records, machine-code readback, and in-game behavior.
-
-This is a research-reproduction requirement. The final v3 release loads automatically through ExeFS and does not require GDB, so the available evidence does not establish 2126.0 as the minimum player-facing runtime version.
-
-## 2. Confirmed action identities
-
-| Move | Action |
-| --- | --- |
-| Fast morph with no stick input | `000B0400` |
-| Morph with no stick input | `00060400` |
-| Fast morph with stick input | `001C0400` |
-| Morph with stick input | `001B0400` |
-
-MH4G v1.2 has four isomorphic entries at `00CA82D4..00CA8313`. Before entering the shared body at `00CAC2D4`, two parameter axes select no-stick/stick input and morph/fast-morph behavior:
-
-| Entry | `(r2,r1)` | Meaning |
-| --- | --- | --- |
-| `00CA82D4` | `(0,0)` | no-stick morph |
-| `00CA82E4` | `(0,1)` | no-stick fast |
-| `00CA82F4` | `(1,0)` | stick-input morph |
-| `00CA8304` | `(1,1)` | stick-input fast |
-
-The older build hooked only the no-stick fast entry. Moving the stick selected the uncovered `(1,1)` branch, which is the primary structural explanation for the earlier reports of intermittent fast-GP failure.
-
-This was verified with two bounded runtime loggers. The Action logger captured `001C0400` for a stick-input fast morph and `00040400 → 001B0400` for the sword-X-to-stick-input-morph route. Under the same installed motion logger and four-hook patch, the already patched no-stick fast control produced `592 → 583`, while the still-unpatched stick-input fast route produced no entries at the existing native wrapper. The zero result therefore had a positive control and showed that the branch bypassed the patched submission path; it was not treated as random logger failure.
-
-## 3. `0x592` and `0x583`
-
-Low-noise runtime logging for the no-stick-input actions produced:
+On Japanese v1.2, `CA783C` checks the current action, action phase, and timing conditions. It then uses two shared helper functions, `B56160` and `B039B0`, to set or clear two important bits in `state+F0`:
 
 ```text
-morph:      592 → 583
-native fast:     583
+bit 0x10
+bit 0x2000
 ```
 
-This identifies `0x592` as a critical observable difference between the morph logic and the native fast route, but it should not be named a “GP function” or “GP flag.” Reconstructing the morph-associated `0x592` motion/resource lifecycle while retaining the fast visual resources was sufficient to make this patch produce GP behavior and red-shield phial bursts through the existing game systems.
+During v3 research, logical motion ID `0x592` was the action identity that entered this timing path. Later v4 work showed that the final patch does not need to replace native fast morph's `0x583` identity with `0x592`. Fast morph already performs a usable `mask=2` state update at the right time. When the current player, target Action, requested mask, and pre-call state all match, v4 expands only that update to `0x2012` and then returns to the original `B56160` helper.
 
-That result does **not** isolate `0x592` itself as the causal GP switch. The unlocated consumer could depend on a resource reached through that context, a phase/event transition, or a downstream Guard/collision condition. The project therefore establishes a verified relationship sufficient for this Charge Blade patch, not a universal GP meaning for `0x592` in other moves or weapons.
-
-## 4. Final patch structure
-
-The formal localized MH4G v1.2 build contains five hooks and one 640-byte overlay:
-
-| Role | Address | Original | Patched |
-| --- | --- | --- | --- |
-| Resource overlay | `00941334` | `E92D5FF0` | `EA12326B` |
-| Native motion wrapper | `00B0D0A0` | `EBFFA103` | `EB0B0340` |
-| No-stick fast entry | `00CA82EC` | `E3A01001` | `EA0496BC` |
-| Stick-input fast entry | `00CA830C` | `E1A01002` | `EA0496B4` |
-| Action-finish wrapper | `00CAC478` | `EBF96833` | `EB048661` |
-
-The runtime overlay occupies `00DCDCE8..00DCDF67`, or 640 bytes / 160 words. v3 adds only the stick-input fast-entry hook; the overlay itself is byte-identical to the v6 machine code that completed the full dynamic regression.
-
-At a high level:
+`0x2012` is not a newly invented all-in-one GP flag. It combines the three parts needed for that one state update:
 
 ```text
-no-stick or stick-input fast entry
-→ clear stale state and arm a fast marker
-→ preserve the stick-input axis while entering the corresponding morph logic
-→ establish a temporary fast visual-resource context during motion submission
-→ let the existing Guard/collision system create GP and the red-shield system add the burst
-→ restore resources and internal state through native-motion prefixes and the action boundary
+0x0002  mask already requested by native fast morph
+0x0010  actual guard-acceptance condition
+0x2000  GP recoil-classification adjustment
+---------------------------------------------
+0x2012  mask passed to the original helper
 ```
 
-The patch does not permanently replace the fast-morph Action with the morph Action, nor does it globally replace morph resources. It combines logic and visual resources for a bounded lifetime and then restores them.
+This is why the final implementation preserves the native `mask=2` timing instead of forcing two state bits to remain active. V4 adds the verified components only when the game is already making the relevant state update.
 
-### 4.1 Independent MH4U relocations
+The precise conclusion is therefore:
 
-The USA and EUR releases reuse the validated behavior and 640-byte layout, but each executable was mapped independently from its own runtime image. Their hook words and external branches were re-encoded for the target addresses; neither release is a renamed or Title-ID-only copy of the MH4G IPS.
+- `0x592` helped identify the native GP identity and timing path;
+- final v4 does not impersonate `0x592`;
+- v4 reuses a native state-establishment moment already present in fast morph.
 
-| Target | Title ID | Five runtime hooks | Overlay range |
-| --- | --- | --- | --- |
-| MH4G Japanese/localized v1.2 | `000400000011D700` | `00941334`, `00B0D0A0`, `00CA82EC`, `00CA830C`, `00CAC478` | `00DCDCE8..00DCDF67` |
-| MH4U USA v1.1 | `0004000000126300` | `00957C4C`, `00B242B8`, `00CC3394`, `00CC33B4`, `00CC7520` | `00DEC890..00DECB0F` |
-| MH4U EUR v1.1 | `0004000000126100` | `00957C84`, `00B24308`, `00CC33E4`, `00CC3404`, `00CC7570` | `00DEC890..00DECB0F` |
+The original `0x592` path's ending is also understood statically. In the later phase, `CA783C` clears `0x10` and `0x2000` through `B039B0`. Its `close=-1` value is not a hidden frame count; it uses `AF1D90 → AEEBC4` to test whether the current action has ended naturally.
 
-The installed USA hook words are `EA12530F`, `EB0B21A4`, `EA04A57C`, `EA04A574`, and `EB049521`. The installed EUR hook words are `EA125301`, `EB0B2190`, `EA04A568`, `EA04A560`, and `EB04950D`. In both builds, the two fast-entry hooks converge on the relocated shared wrapper at `00DEC98C` while preserving the no-stick/stick-input selector.
+Final fast v4 no longer uses the `0x592` identity, so that `0x592` closing route must not be presented as proof that one specific Action or flag closes fast v4. Repeated runtime tests confirmed that the fast-action state is recovered after the action ends. The careful conclusion is that the patch activates GP during the correct native update and lets the action's existing lifecycle perform cleanup; this document does not invent a fast-specific closing switch that has not been isolated independently.
 
-| Target | 640-byte overlay SHA-256 | Formal `code.ips` SHA-256 |
-| --- | --- | --- |
-| MH4G Japanese/localized v1.2 | `E82E27E04C7163BFBEACBD5ED5B02115B7DFC814803A4EB326102A7B5DC25D03` | `3EB88248D44A9EFE4A83A372A5EA682779BAB2BE8F3E6E8F9101763B88ACA8F4` |
-| MH4U USA v1.1 | `E529D92B9ECFD8BE21D084A87250EC426DF0C1091C0F488AFF72B145783E1F0A` | `683B2AD2A378CA404CA7976F6D3E6721397A77FAB3357AB2C019CEFB5ED932FE` |
-| MH4U EUR v1.1 | `FB318D5158E4028C45F5FB173D32D9FC5E46D9E179E0FD521D257FAA13949853` | `56B266F5FA86346D79339EE84258FC878B23B49408684B7B6DF3237AB3024AB2` |
+## 3. `bit 0x10`: whether the guard is actually accepted
 
-All three formal IPS files are 698 bytes with six records: five 4-byte hooks and one 640-byte overlay record.
+`B54EE0` reads `state+F0` and checks `bit 0x10` at `B55074`. The caller at `B018A8` immediately uses the return value to decide whether processing can continue as a valid guard.
 
-## 5. Why the v6 prefix state machine was necessary
+A reversible call wrapper temporarily hid `bit 0x10` only while calling the original `B54EE0`, leaving all other state changes intact. The result was causal and reproducible:
 
-Earlier overlays could produce the fast animation and GP, but repeated use exposed stale state and morph-animation contamination. The important observed sequences were:
+- fast morph still showed guard-contact sparks, but the hunter was hit;
+- held-R guarding also showed sparks, but no longer blocked the attack;
+- restoring the original call restored both forms of guarding.
+
+`bit 0x10` is therefore a key guard condition shared by held-R shield guarding and GP. It is not a GP-only marker. Guard sparks belong to an earlier or separate presentation layer: they show that contact occurred, but do not prove that the attack was blocked.
+
+## 4. `bit 0x2000`: GP guard-performance adjustment
+
+`B2804C` calculates an internal value that the game later uses to choose small, medium, or large recoil. It reads `state+F0` and checks `bit 0x2000`:
+
+- without the bit, the value is retained;
+- with the bit, the value is reduced by 10 and clamped to a minimum of 1.
+
+This “-10” is not hunter defense, damage, stamina, or animation frames.
+
+Two confirmed code paths use the result:
+
+- `B0E5B0` selects small (0), medium (1), or large (2) recoil using action-dependent thresholds;
+- `B23B48` selects recoil displacement values 150, 200, or 360.
+
+This matches the earlier dynamic tests: `0x2000` alone cannot create a guard, but together with `0x10` it improves the final recoil result—the behavior players describe as GP's guard-performance bonus.
+
+`B2804C` also uses generic queries 98, 99, and 100, but their player-visible names remain unknown. This document does not guess those names; the gap does not affect the verified `0x2000` path.
+
+## 5. Red-shield phial burst is a separate successful-contact path
+
+Bits `0x10` and `0x2000` do not automatically produce a phial burst.
+
+After a successful fast-morph GP, v4 continues only when the Action, contact object, and guard result all match. It then checks the player's red-shield timer at `state+0x60`:
+
+- timer is zero: keep the GP, but do not request a burst;
+- timer is nonzero: set `state+0x489 bit 2`, handing this contact to the game's native burst path.
+
+The confirmed Japanese-build downstream path is:
 
 ```text
-A: standalone fast    592 → 583
-B: fast GP follow-up  592 → 592 → 583 → 579 → 56B
-C: later morph        567 → 592
+CA895C sets state+0x489 bit 2
+→ B3791C / CA92A8
+→ type-3 phial-burst object
+→ embedded active collision record
+→ BD364C collision registration
+→ BDA990 / BD42B4 entity resolution
+→ BCFBEC / 919D0C hit-result submission
+→ 909930 result-queue processing
+→ 925128 target-current-HP update
 ```
 
-Before an actual resource switch exists, v6 temporarily reuses the fifth state word as a prefix stage:
+The burst is therefore not merely a visual effect. Its object, collision, entity, result queue, and final damage are parts of one traceable native pipeline.
 
-- `592` preserves the marker and records the prefix stage;
-- `583` is allowed to continue when preceded by `592`;
-- any other motion, or `583` without a preceding `592`, restores the five state words before forwarding;
-- after the overlay is established, the fifth word resumes its real saved-length role and no longer overlaps the prefix stage.
+## 6. Fast Morph GP v4: two native-timing hooks
 
-This permits repeated fast chains, while the morph's `567` prefix clears a dormant marker before the morph `592`, preventing fast-resource contamination.
+The standalone patch needs two hooks:
 
-## 6. Validation scope
+1. **GP timing hook:** for the current player's fast-morph Actions, expand a native mask-2 call with pre-call `F0=1` to `0x2012`, then execute the original helper.
+2. **Successful-contact hook:** only on the successful fast-GP result path, check the red-shield timer and request the native burst when appropriate.
 
-The final result is supported by both offline and dynamic validation:
+Target Actions are:
 
-- reverse parsing of the IPS, record offsets, little-endian payloads, and branch targets;
-- overlay size, key signatures, and SHA-256;
-- clean Azahar automatic loading after a full restart rather than GDB injection;
-- readback of all five hooks, the overlay, `592/583` literals, and state words;
-- no-stick/stick-input and morph/fast-morph animation isolation;
-- GP, red-shield phial bursts, and consecutive stick-input fast GP;
-- primary follow-ups including axe slam, roundslash, and discharge;
-- action completion, re-entry, rolling, area transitions, and state recovery;
-- extended gameplay with CPU JIT enabled.
+```text
+000B0400  fast morph without moving the left stick
+001C0400  fast morph while moving the left stick
+```
 
-The internal state may be fully zero or, in specific tested cases, contain a safe dormant marker that the next valid entry recovers. A dormant `1,0,0,0,0` state was explicitly tested against a later morph and did not contaminate its animation; later accepted sessions also ended with all five words at zero.
+The implementation does not write the motion ID, impersonate the native morph action, perform per-frame state writes, or include loggers. Japanese v1.2 uses two hooks and stores the patch logic in a 264-byte blank code area, commonly called a code cave. The IPS contains three records: two hooks and the cave. USA and EUR use the same behavior, with addresses and branches relocated independently for each build.
 
-Regional acceptance was not inferred from the MH4G result:
+## 7. Why sword-mode charge GP needs different result handling
 
-| Target | Independent runtime acceptance |
-| --- | --- |
-| MH4G Japanese/localized v1.2 | Clean ExeFS automatic loading, five-hook readback, no-stick/stick-input isolation, consecutive GP and follow-ups, plus approximately 10 minutes of CPU-JIT-on stick-input combat testing; final accepted status was all zero. |
-| MH4U USA v1.1 | Clean ExeFS automatic loading with CPU JIT enabled and an approximately 22-minute mixed regression covering branch switching, consecutive GP, bursts, follow-ups, rolling, area transitions, and recovery; all five final state words were zero. The accepted RC1 IPS was promoted unchanged. |
-| MH4U EUR v1.1 | A GDB candidate first passed the core branches with CPU JIT off, was safely restored, and was followed by clean ExeFS automatic loading and an approximately 10-minute CPU-JIT-on mixed regression; all five final state words were zero. The accepted RC1 IPS was promoted unchanged. |
+The sword-mode charge-hold Action is `00340400`. Very short or automatic release may enter `00330400`, while a normal release may enter `00220400`. A bounded logger showed that the usable native mask timing occurs during `00340400`, while the shield is visibly held forward, rather than during the later release attack.
 
-## 7. Final conclusion on the fast GP window
+The shared GP hook can establish `0x10` and `0x2000`, but the result must be handled by recoil class:
 
-A plan once existed to trim the late end of the fast GP window manually, but that task has been cancelled. Natural no-stick fast-morph measurements placed the latest trustworthy positive at frame `27.0` and the earliest contact-classified negative at approximately `30.006`, independently repeated at approximately `30.008`; frames 28–29 remain unresolved. The existing morph reference was positive at `32.5` and negative at `33.0`, so the fast window is already demonstrably shorter.
+- small/medium recoil: suppress the result transition that would interrupt charging;
+- large recoil: allow the native result to interrupt the charge.
 
-The user's later comparison with MHGU also confirmed that the official fast morph with stick input has a GP, and that its late-window feel is close to the current MH4G v3 result. This MHGU comparison is gameplay observation, not a frame-exact cross-game measurement.
+Charge slash does not read `state+0x489 bit 2` at the same point as fast morph. Leaving that bit set for later could trigger it at the wrong time. The final implementation therefore calls the version-specific native phial-burst submitter directly after confirming the charge Action, successful guard result, and active red shield.
 
-Confirmed: the fast window does not simply inherit the entire morph window.
+This still creates the game's own complete type-3 burst object and native collision/damage path; it is not a custom visual effect.
 
-Strong interpretation: native action lifetime, phase, or motion changes end the GP naturally.
+## 8. Combined-package structure
 
-Not proven: a specific Action, single flag, or already located fixed condition closes it. The investigation also found that jumping directly from frame 0 to a target frame skips natural events, so late positive results produced by that method are not treated as natural-window evidence.
+Both features need the same GP timing entry, so their independent IPS files cannot simply be concatenated. The combined package uses one shared dispatcher:
 
-The earlier suspicion of an inherent GP gap at fast-morph startup is likewise downgraded rather than established. The uncovered stick-input branch explains the old reproducible failures much better: before the fifth hook, stick input bypassed the patched route entirely. Bad facing or input timing can still produce a normal failed guard, but the project did not prove a separate built-in startup gap.
+```text
+shared GP hook
+├─ 000B0400: fast morph without moving the left stick
+├─ 001C0400: fast morph while moving the left stick
+└─ 00340400: sword-mode charge hold
 
-## 8. Evidence levels
+fast successful-contact hook
+└─ enter the native bit-2 burst consumer when red shield is active
+
+charge-result hook
+├─ small/medium recoil: continue charging
+├─ large recoil: native interruption
+└─ red shield: call the native burst submitter directly
+```
+
+The combined release uses three hooks and a 792-byte cave. It already contains Fast Morph GP v4 and must not be installed together with the standalone patch.
+
+## 9. Evidence status
 
 ### Verified
 
-- the four action identities and the stick-input branch structure;
-- the five-hook, 640-byte final machine structure;
-- morph/fast-morph visual isolation, GP, bursts, primary follow-ups, and state recovery;
-- the uncovered stick-input branch as the main explanation for old failures;
-- the fast window not being a complete copy of the morph window.
+- `bit 0x10` is a shared guard-acceptance condition for held-R guarding and GP.
+- `bit 0x2000` reduces the internal recoil-classification value by 10, clamped to 1.
+- recoil class and physical displacement consume that value in separate functions.
+- the red-shield burst has a separate object, collision, result-queue, and HP-damage pipeline.
+- the two-hook native v4 preserves action identity and passed gameplay testing in all three regions.
+- small/medium charge-GP recoil continues charging, while large recoil interrupts it, in all three regions.
+- both standalone and combined releases passed installation checks, state checks, and safe restoration.
 
-### Strongly inferred
+### Not exhaustively covered
 
-- GP emerges when the reconstructed `0x592`-related motion/resource context reaches the existing Guard/collision system;
-- later lifecycle, phase, or motion changes naturally end the fast window.
+- multi-hit monster attacks did not receive a dedicated test matrix;
+- the player-visible names of queries 98/99/100 remain unknown;
+- no repeated burst was observed, but this is not an exhaustive proof for every multi-hit timing pattern.
+- reusing a native state-update point is not evidence of an official disabled “hidden fast GP” feature; the evidence supports this project's reconstruction and extension of native mechanisms.
 
-### Open questions
+## 10. The historical value of v3
 
-- the exact GP close condition and its consumer;
-- the complete causal relationship between `0x592` and the generic Guard/collision system;
-- whether this can be abstracted into a safe, general GP-porting method for other weapons.
+V3 was not a “wrong version.” It was the first complete engineering solution for fast GP, red-shield burst, both input branches, repeated use, and state recovery, and it provided a stable A baseline for v4 research.
 
-These open questions do not affect the completed status of the MH4G Japanese/localized, MH4U USA, or MH4U EUR v3 releases.
+Its `0x592 → 0x583` overlay changed logical identity and resource lifetime together, so it proved that a particular combination was sufficient. V4 used later A/B tests, code paths that read the state bits, contact-path tracing, and transfer to a new action to separate that combination into independently understood native mechanisms and build a smaller final implementation.
